@@ -17,7 +17,7 @@ public class PVPTeamCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+            sender.sendMessage(ChatColor.RED + "只有玩家可以使用此命令。");
             return true;
         }
 
@@ -33,59 +33,59 @@ public class PVPTeamCommand implements CommandExecutor {
         switch (sub) {
             case "create":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt create <name>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt create <名称>");
                     return true;
                 }
                 plugin.getArenaManager().createArena(args[1]);
-                player.sendMessage(ChatColor.GREEN + "Arena " + args[1] + " created!");
+                player.sendMessage(ChatColor.GREEN + "竞技场 " + args[1] + " 已创建！");
                 break;
                 
             case "setlobby":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt setlobby <arena>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt setlobby <竞技场>");
                     return true;
                 }
                 Arena arenaLobby = plugin.getArenaManager().getArena(args[1]);
                 if (arenaLobby == null) {
-                    player.sendMessage(ChatColor.RED + "Arena not found.");
+                    player.sendMessage(ChatColor.RED + "未找到竞技场。");
                     return true;
                 }
                 arenaLobby.setLobby(player.getLocation());
                 plugin.getArenaManager().saveArena(args[1]);
-                player.sendMessage(ChatColor.GREEN + "Lobby set for " + args[1]);
+                player.sendMessage(ChatColor.GREEN + "已设置 " + args[1] + " 的大厅。");
                 break;
                 
             case "addspawn":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 3) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt addspawn <arena> <red/blue>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt addspawn <竞技场> <red/blue>");
                     return true;
                 }
                 Arena arenaSpawn = plugin.getArenaManager().getArena(args[1]);
                 if (arenaSpawn == null) {
-                    player.sendMessage(ChatColor.RED + "Arena not found.");
+                    player.sendMessage(ChatColor.RED + "未找到竞技场。");
                     return true;
                 }
                 String teamStr = args[2].toLowerCase();
                 if (teamStr.equals("red")) {
                     arenaSpawn.addSpawn(TeamType.RED, player.getLocation());
-                    player.sendMessage(ChatColor.GREEN + "Added Red spawn.");
+                    player.sendMessage(ChatColor.GREEN + "已添加红队出生点。");
                 } else if (teamStr.equals("blue")) {
                     arenaSpawn.addSpawn(TeamType.BLUE, player.getLocation());
-                    player.sendMessage(ChatColor.GREEN + "Added Blue spawn.");
+                    player.sendMessage(ChatColor.GREEN + "已添加蓝队出生点。");
                 } else {
-                    player.sendMessage(ChatColor.RED + "Invalid team. Use red or blue.");
+                    player.sendMessage(ChatColor.RED + "无效队伍。请使用 red 或 blue。");
                     return true;
                 }
                 plugin.getArenaManager().saveArena(args[1]);
@@ -93,88 +93,88 @@ public class PVPTeamCommand implements CommandExecutor {
                 
             case "settime":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 3) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt settime <arena> <seconds>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt settime <竞技场> <秒数>");
                     return true;
                 }
                 try {
                     int seconds = Integer.parseInt(args[2]);
                     Arena a = plugin.getArenaManager().getArena(args[1]);
                     if (a == null) {
-                        player.sendMessage(ChatColor.RED + "Arena not found.");
+                        player.sendMessage(ChatColor.RED + "未找到竞技场。");
                         return true;
                     }
                     a.setDuration(seconds);
                     plugin.getArenaManager().saveArena(args[1]);
-                    player.sendMessage(ChatColor.GREEN + "Time set to " + seconds + "s.");
+                    player.sendMessage(ChatColor.GREEN + "时间已设置为 " + seconds + " 秒。");
                 } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Invalid number.");
+                    player.sendMessage(ChatColor.RED + "无效数字。");
                 }
                 break;
                 
             case "setkills":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 3) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt setkills <arena> <amount>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt setkills <竞技场> <数量>");
                     return true;
                 }
                 try {
                     int kills = Integer.parseInt(args[2]);
                     Arena a = plugin.getArenaManager().getArena(args[1]);
                     if (a == null) {
-                        player.sendMessage(ChatColor.RED + "Arena not found.");
+                        player.sendMessage(ChatColor.RED + "未找到竞技场。");
                         return true;
                     }
                     a.setTargetKills(kills);
                     plugin.getArenaManager().saveArena(args[1]);
-                    player.sendMessage(ChatColor.GREEN + "Target kills set to " + kills + ".");
+                    player.sendMessage(ChatColor.GREEN + "目标击杀数已设置为 " + kills + "。");
                 } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Invalid number.");
+                    player.sendMessage(ChatColor.RED + "无效数字。");
                 }
                 break;
                 
             case "setmin":
                 if (!player.hasPermission("pvpteam.admin")) {
-                    player.sendMessage(ChatColor.RED + "No permission.");
+                    player.sendMessage(ChatColor.RED + "没有权限。");
                     return true;
                 }
                 if (args.length < 3) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt setmin <arena> <amount>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt setmin <竞技场> <数量>");
                     return true;
                 }
                 try {
                     int min = Integer.parseInt(args[2]);
                     Arena a = plugin.getArenaManager().getArena(args[1]);
                     if (a == null) {
-                        player.sendMessage(ChatColor.RED + "Arena not found.");
+                        player.sendMessage(ChatColor.RED + "未找到竞技场。");
                         return true;
                     }
                     a.setMinPlayers(min);
                     plugin.getArenaManager().saveArena(args[1]);
-                    player.sendMessage(ChatColor.GREEN + "Min players set to " + min + ".");
+                    player.sendMessage(ChatColor.GREEN + "最小人数已设置为 " + min + "。");
                 } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Invalid number.");
+                    player.sendMessage(ChatColor.RED + "无效数字。");
                 }
                 break;
                 
             case "join":
                 if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /pvpt join <arena>");
+                    player.sendMessage(ChatColor.RED + "用法：/pvpt join <竞技场>");
                     return true;
                 }
                 Arena arenaJoin = plugin.getArenaManager().getArena(args[1]);
                 if (arenaJoin == null) {
-                    player.sendMessage(ChatColor.RED + "Arena not found.");
+                    player.sendMessage(ChatColor.RED + "未找到竞技场。");
                     return true;
                 }
                 if (!arenaJoin.isConfigured()) {
-                     player.sendMessage(ChatColor.RED + "Arena is not fully configured yet.");
+                     player.sendMessage(ChatColor.RED + "竞技场尚未配置完成。");
                      return true;
                 }
                 arenaJoin.join(player);
@@ -185,7 +185,7 @@ public class PVPTeamCommand implements CommandExecutor {
                 if (current != null) {
                     current.quit(player);
                 } else {
-                    player.sendMessage(ChatColor.RED + "You are not in a game.");
+                    player.sendMessage(ChatColor.RED + "你不在游戏中。");
                 }
                 break;
                 
@@ -198,16 +198,16 @@ public class PVPTeamCommand implements CommandExecutor {
     }
     
     private void help(Player p) {
-        p.sendMessage(ChatColor.GOLD + "PVP Team Commands:");
-        p.sendMessage("/pvpt join <arena>");
+        p.sendMessage(ChatColor.GOLD + "PVP 团队指令：");
+        p.sendMessage("/pvpt join <竞技场>");
         p.sendMessage("/pvpt leave");
         if (p.hasPermission("pvpteam.admin")) {
-            p.sendMessage("/pvpt create <name>");
-            p.sendMessage("/pvpt setlobby <arena>");
-            p.sendMessage("/pvpt addspawn <arena> <red/blue>");
-            p.sendMessage("/pvpt settime <arena> <seconds>");
-            p.sendMessage("/pvpt setkills <arena> <amount>");
-            p.sendMessage("/pvpt setmin <arena> <amount>");
+            p.sendMessage("/pvpt create <名称>");
+            p.sendMessage("/pvpt setlobby <竞技场>");
+            p.sendMessage("/pvpt addspawn <竞技场> <red/blue>");
+            p.sendMessage("/pvpt settime <竞技场> <秒数>");
+            p.sendMessage("/pvpt setkills <竞技场> <数量>");
+            p.sendMessage("/pvpt setmin <竞技场> <数量>");
         }
     }
 }

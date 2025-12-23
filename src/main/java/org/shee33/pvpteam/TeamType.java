@@ -4,8 +4,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.Color;
 
 public enum TeamType {
-    RED("Red", ChatColor.RED, Color.RED),
-    BLUE("Blue", ChatColor.BLUE, Color.BLUE);
+    RED("红队", ChatColor.RED, Color.RED),
+    BLUE("蓝队", ChatColor.BLUE, Color.BLUE);
 
     private final String name;
     private final ChatColor chatColor;

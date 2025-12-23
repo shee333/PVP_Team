@@ -35,11 +35,13 @@ public class GameListener implements Listener {
             event.setDroppedExp(0);
             event.setDeathMessage(null); // Custom handling or just hide
             
+            Location deathLoc = p.getLocation();
+            
             // Auto respawn strategy:
             // We schedule the handling for next tick to avoid issues during death event
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 p.spigot().respawn();
-                arena.handleDeath(p);
+                arena.handleDeath(p, deathLoc);
             }, 1L);
         }
     }

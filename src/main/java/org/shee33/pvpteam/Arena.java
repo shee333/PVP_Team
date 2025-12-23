@@ -108,12 +108,12 @@ public class Arena {
 
     public void join(Player player) {
         if (state == ArenaState.ENDING) {
-            player.sendMessage(ChatColor.RED + "Game is ending.");
+            player.sendMessage(ChatColor.RED + "比赛即将结束。");
             return;
         }
         
         if (players.contains(player.getUniqueId())) {
-            player.sendMessage(ChatColor.RED + "You are already in this game.");
+            player.sendMessage(ChatColor.RED + "你已经在这场比赛中了。");
             return;
         }
 
@@ -128,8 +128,8 @@ public class Arena {
         TeamType team = (redCount <= blueCount) ? TeamType.RED : TeamType.BLUE;
         playerTeams.put(player.getUniqueId(), team);
         
-        player.sendMessage(ChatColor.GREEN + "Joined arena " + name + " as Team " + team.getChatColor() + team.getName());
-        broadcast(ChatColor.YELLOW + player.getName() + " joined the game (" + players.size() + "/" + minPlayers + " to start).");
+        player.sendMessage(ChatColor.GREEN + "加入了竞技场 " + name + " 队伍：" + team.getChatColor() + team.getName());
+        broadcast(ChatColor.YELLOW + player.getName() + " 加入了游戏 (" + players.size() + "/" + minPlayers + " 人即可开始)。");
 
         setupScoreboard(player);
 
@@ -162,7 +162,7 @@ public class Arena {
             player.teleport(lobby);
         }
 
-        broadcast(ChatColor.YELLOW + player.getName() + " left the game.");
+        broadcast(ChatColor.YELLOW + player.getName() + " 离开了游戏。");
 
         if (state == ArenaState.RUNNING && players.size() < 2) {
             // Optional: End game if too few players?
@@ -175,7 +175,7 @@ public class Arena {
                 countdownTask.cancel();
                 countdownTask = null;
             }
-            broadcast(ChatColor.RED + "Countdown cancelled. Not enough players.");
+            broadcast(ChatColor.RED + "倒计时取消。人数不足。");
         }
     }
 
@@ -201,7 +201,7 @@ public class Arena {
                 for (UUID uuid : players) {
                     Player p = Bukkit.getPlayer(uuid);
                     if (p != null) {
-                        p.sendTitle(ChatColor.YELLOW + "Starting in " + seconds, "", 0, 20, 0);
+                        p.sendTitle(ChatColor.YELLOW + "距离开始还有 " + seconds + " 秒", "", 0, 20, 0);
                         p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1f);
                     }
                 }
@@ -215,7 +215,7 @@ public class Arena {
         state = ArenaState.RUNNING;
         timeLeft = duration;
         
-        broadcast(ChatColor.GREEN + "Game Started!");
+        broadcast(ChatColor.GREEN + "比赛开始！");
         
         for (UUID uuid : players) {
             Player p = Bukkit.getPlayer(uuid);
@@ -263,7 +263,7 @@ public class Arena {
         setupScoreboard(p);
     }
 
-    public void handleDeath(Player victim) {
+    public void handleDeath(Player victim, Location deathLoc) {
         if (!players.contains(victim.getUniqueId())) return;
         
         deaths.merge(victim.getUniqueId(), 1, Integer::sum);
@@ -286,6 +286,7 @@ public class Arena {
         // User says: "Player death -> Clear inventory -> Spectator -> 3s -> Respawn"
         // I should handle PlayerDeathEvent to keepInventory = true (to avoid drops) and then clear it.
         
+        victim.teleport(deathLoc);
         victim.setGameMode(GameMode.SPECTATOR);
         victim.getInventory().clear();
         
@@ -304,7 +305,7 @@ public class Arena {
                     return;
                 }
                 
-                victim.sendTitle(ChatColor.RED + "Respawning in " + count, "", 0, 20, 0);
+                victim.sendTitle(ChatColor.RED + "复活倒计时 " + count + " 秒", "", 0, 20, 0);
                 count--;
             }
         }.runTaskTimer(plugin, 0L, 20L);
@@ -322,8 +323,8 @@ public class Arena {
         state = ArenaState.ENDING;
         if (gameTask != null) gameTask.cancel();
         
-        String winMsg = (winner == null) ? "Draw!" : winner.getChatColor() + winner.getName() + " Team Wins!";
-        broadcast(ChatColor.BOLD + "" + ChatColor.GOLD + "Game Over! " + winMsg);
+        String winMsg = (winner == null) ? "平局！" : winner.getChatColor() + winner.getName() + " 队获胜！";
+        broadcast(ChatColor.BOLD + "" + ChatColor.GOLD + "比赛结束！ " + winMsg);
         
         // Play sound
         for (UUID uuid : players) {
@@ -337,14 +338,14 @@ public class Arena {
         // Stats
         StringBuilder stats = new StringBuilder();
         stats.append(ChatColor.GRAY).append("----------------\n");
-        stats.append(ChatColor.GOLD).append("Winner: ").append(winMsg).append("\n");
+        stats.append(ChatColor.GOLD).append("获胜者：").append(winMsg).append("\n");
         for (UUID uuid : players) {
             Player p = Bukkit.getPlayer(uuid);
             if (p != null) {
                 stats.append(playerTeams.get(uuid).getChatColor()).append(p.getName())
                      .append(ChatColor.GRAY).append(": ")
-                     .append(kills.get(uuid)).append(" Kills, ")
-                     .append(deaths.get(uuid)).append(" Deaths\n");
+                     .append(kills.get(uuid)).append(" 击杀，")
+                     .append(deaths.get(uuid)).append(" 死亡\n");
             }
         }
         stats.append(ChatColor.GRAY).append("----------------");
@@ -394,8 +395,24 @@ public class Arena {
         // Teams for nametags
         Team red = sb.registerNewTeam("Red");
         red.setColor(ChatColor.RED);
-        red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OTHER_TEAMS); 
-        // Wait, "Hide enemy nametags" -> FOR_OWN_TEAM (Show to own team, hide from others)
+        // FOR_OTHER_TEAMS: Hidden from own team, Visible to other teams.
+        // If we want: 
+        // - Teammates visible? 
+        // - Enemies hidden?
+        // Wait, default is ALWAYS. 
+        // If I want enemies hidden: OptionStatus.FOR_OWN_TEAM (Visible only to own team).
+        // If I want teammates hidden: OptionStatus.FOR_OTHER_TEAMS (Visible only to other teams).
+        
+        // User BUG: "Teammates NOT showing, Enemies showing".
+        // This means currently it is behaving like FOR_OTHER_TEAMS.
+        // My previous code had:
+        // red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OTHER_TEAMS); 
+        // red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
+        
+        // So it should be FOR_OWN_TEAM. 
+        // Why is it failing?
+        // Because other players are not added to THIS scoreboard's teams!
+        
         red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
         red.setAllowFriendlyFire(false);
 
@@ -416,6 +433,27 @@ public class Arena {
 
         p.setScoreboard(sb);
         updateScoreboard(p);
+        
+        // IMPORTANT: Update ALL other players' scoreboards to include THIS player
+        TeamType myTeam = playerTeams.get(p.getUniqueId());
+        for (UUID uuid : players) {
+            if (uuid.equals(p.getUniqueId())) continue;
+            Player other = Bukkit.getPlayer(uuid);
+            if (other != null) {
+                Scoreboard otherSb = other.getScoreboard();
+                Team otherRed = otherSb.getTeam("Red");
+                Team otherBlue = otherSb.getTeam("Blue");
+                
+                // Add p to other's scoreboard teams
+                if (myTeam == TeamType.RED && otherRed != null) {
+                    otherRed.addEntry(p.getName());
+                } else if (myTeam == TeamType.BLUE && otherBlue != null) {
+                    otherBlue.addEntry(p.getName());
+                }
+                
+                // Also ensure 'other' is added to 'p's scoreboard (Already done in loop above)
+            }
+        }
     }
     
     private void updateScoreboard() {
@@ -445,26 +483,26 @@ public class Arena {
         // Actually, just clearing specific scores is hard. 
         // Let's use specific fake entries.
         
-        obj.getScore(ChatColor.RED + "Team Red: " + ChatColor.WHITE + redKills + "/" + targetKills).setScore(3);
-        obj.getScore(ChatColor.BLUE + "Team Blue: " + ChatColor.WHITE + blueKills + "/" + targetKills).setScore(2);
+        obj.getScore(ChatColor.RED + "红队：" + ChatColor.WHITE + redKills + "/" + targetKills).setScore(3);
+        obj.getScore(ChatColor.BLUE + "蓝队：" + ChatColor.WHITE + blueKills + "/" + targetKills).setScore(2);
         
         int mins = timeLeft / 60;
         int secs = timeLeft % 60;
         String timeStr = String.format("%02d:%02d", mins, secs);
-        obj.getScore(ChatColor.YELLOW + "Time: " + ChatColor.WHITE + timeStr).setScore(1);
+        obj.getScore(ChatColor.YELLOW + "时间：" + ChatColor.WHITE + timeStr).setScore(1);
         
         // We need to clear old scores if values change to avoid duplicates.
         // A common way is to use unique identifiers and update suffixes.
         // But for this MVP, let's keep it simple. Duplicate lines might appear if I don't clear.
         // To fix:
         for (String entry : sb.getEntries()) {
-            if (entry.contains("Team Red") && !entry.equals(ChatColor.RED + "Team Red: " + ChatColor.WHITE + redKills + "/" + targetKills)) {
+            if (entry.contains("红队") && !entry.equals(ChatColor.RED + "红队：" + ChatColor.WHITE + redKills + "/" + targetKills)) {
                 sb.resetScores(entry);
             }
-            if (entry.contains("Team Blue") && !entry.equals(ChatColor.BLUE + "Team Blue: " + ChatColor.WHITE + blueKills + "/" + targetKills)) {
+            if (entry.contains("蓝队") && !entry.equals(ChatColor.BLUE + "蓝队：" + ChatColor.WHITE + blueKills + "/" + targetKills)) {
                 sb.resetScores(entry);
             }
-            if (entry.contains("Time") && !entry.equals(ChatColor.YELLOW + "Time: " + ChatColor.WHITE + timeStr)) {
+            if (entry.contains("时间") && !entry.equals(ChatColor.YELLOW + "时间：" + ChatColor.WHITE + timeStr)) {
                 sb.resetScores(entry);
             }
         }
