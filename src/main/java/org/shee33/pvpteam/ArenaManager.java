@@ -22,6 +22,11 @@ public class ArenaManager {
     public ArenaManager(PVP_Team plugin) {
         this.plugin = plugin;
         this.file = new File(plugin.getDataFolder(), "arenas.yml");
+        
+        if (!plugin.getDataFolder().exists()) {
+            plugin.getDataFolder().mkdirs();
+        }
+
         if (!file.exists()) {
             try {
                 file.createNewFile();
