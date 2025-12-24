@@ -27,6 +27,7 @@ public class GameListener implements Listener {
 
     @EventHandler
     public void onDeath(PlayerDeathEvent event) {
+        // Fallback in case they die from something else (e.g. /kill)
         Player p = event.getEntity();
         Arena arena = plugin.getArenaManager().getArena(p);
         if (arena == null) return;
@@ -34,12 +35,10 @@ public class GameListener implements Listener {
         if (arena.getState() == ArenaState.RUNNING) {
             event.getDrops().clear();
             event.setDroppedExp(0);
-            event.setDeathMessage(null); // Custom handling or just hide
+            event.setDeathMessage(null); 
             
             Location deathLoc = p.getLocation();
             
-            // Auto respawn strategy:
-            // We schedule the handling for next tick to avoid issues during death event
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 p.spigot().respawn();
                 arena.handleDeath(p, deathLoc);
@@ -53,47 +52,52 @@ public class GameListener implements Listener {
         Player p = event.getPlayer();
         Arena arena = plugin.getArenaManager().getArena(p);
         if (arena != null && arena.getState() == ArenaState.RUNNING) {
-            // We handle teleportation in handleDeath -> task -> spawnPlayer
-            // But if respawn happens before spectator logic, we might need to intercept.
-            // With the strategy above (force respawn then handleDeath), 
-            // handleDeath sets spectator. So this event will fire before handleDeath completes logic.
-            // Let's just set the respawn location to current location to avoid jumping around before spectator.
-            event.setRespawnLocation(p.getLocation());
+             event.setRespawnLocation(p.getLocation());
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player) || !(event.getDamager() instanceof Player)) {
-            return;
-        }
-
+        if (!(event.getEntity() instanceof Player)) return;
         Player victim = (Player) event.getEntity();
-        Player attacker = (Player) event.getDamager();
-
         Arena arena = plugin.getArenaManager().getArena(victim);
-        Arena arena2 = plugin.getArenaManager().getArena(attacker);
+        
+        // Friendly fire and arena checks
+        if (event.getDamager() instanceof Player) {
+            Player attacker = (Player) event.getDamager();
+            Arena arena2 = plugin.getArenaManager().getArena(attacker);
 
-        // Not in game
-        if (arena == null && arena2 == null) return;
+            // Not in game
+            if (arena == null && arena2 == null) return;
 
-        // One in game, one not? Cancel
-        if (arena == null || arena2 == null || !arena.equals(arena2)) {
-            event.setCancelled(true);
-            return;
+            // One in game, one not? Cancel
+            if (arena == null || arena2 == null || !arena.equals(arena2)) {
+                event.setCancelled(true);
+                return;
+            }
+
+            if (arena.getState() != ArenaState.RUNNING) {
+                event.setCancelled(true);
+                return;
+            }
+
+            // Friendly fire check
+            TeamType t1 = arena.getTeam(victim);
+            TeamType t2 = arena.getTeam(attacker);
+
+            if (t1 != null && t1 == t2) {
+                event.setCancelled(true);
+                return;
+            }
         }
-
-        if (arena.getState() != ArenaState.RUNNING) {
-            event.setCancelled(true);
-            return;
-        }
-
-        // Friendly fire check
-        TeamType t1 = arena.getTeam(victim);
-        TeamType t2 = arena.getTeam(attacker);
-
-        if (t1 != null && t1 == t2) {
-            event.setCancelled(true);
+        
+        // Simulated Death Check
+        if (arena != null && arena.getState() == ArenaState.RUNNING) {
+            if (victim.getHealth() - event.getFinalDamage() <= 0) {
+                event.setCancelled(true);
+                arena.handleDeath(victim, victim.getLocation());
+                victim.setHealth(20); // Heal them so they don't actually die
+            }
         }
     }
 }

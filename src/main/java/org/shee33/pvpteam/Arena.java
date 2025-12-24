@@ -131,7 +131,7 @@ public class Arena {
         player.sendMessage(ChatColor.GREEN + "加入了竞技场 " + name + " 队伍：" + team.getChatColor() + team.getName());
         broadcast(ChatColor.YELLOW + player.getName() + " 加入了游戏 (" + players.size() + "/" + minPlayers + " 人即可开始)。");
 
-        setupScoreboard(player);
+        initScoreboard(player);
 
         // If game is running, spawn immediately
         if (state == ArenaState.RUNNING) {
@@ -259,8 +259,8 @@ public class Arena {
         // Execute /clo equip
         p.performCommand("clo equip");
         
-        // Setup visuals again just in case
-        setupScoreboard(p);
+        // Update scoreboard values only, do NOT reset teams
+        updateScoreboard(p);
     }
 
     public void handleDeath(Player victim, Location deathLoc) {
@@ -387,7 +387,7 @@ public class Arena {
     }
 
     // Scoreboard & Teams
-    private void setupScoreboard(Player p) {
+    private void initScoreboard(Player p) {
         Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();
         Objective obj = sb.registerNewObjective("pvpteam", "dummy", ChatColor.GOLD + "ACT/0/ - 团队竞技");
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
@@ -395,29 +395,13 @@ public class Arena {
         // Teams for nametags
         Team red = sb.registerNewTeam("Red");
         red.setColor(ChatColor.RED);
-        // FOR_OTHER_TEAMS: Hidden from own team, Visible to other teams.
-        // If we want: 
-        // - Teammates visible? 
-        // - Enemies hidden?
-        // Wait, default is ALWAYS. 
-        // If I want enemies hidden: OptionStatus.FOR_OWN_TEAM (Visible only to own team).
-        // If I want teammates hidden: OptionStatus.FOR_OTHER_TEAMS (Visible only to other teams).
-        
-        // User BUG: "Teammates NOT showing, Enemies showing".
-        // This means currently it is behaving like FOR_OTHER_TEAMS.
-        // My previous code had:
-        // red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OTHER_TEAMS); 
-        // red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
-        
-        // So it should be FOR_OWN_TEAM. 
-        // Why is it failing?
-        // Because other players are not added to THIS scoreboard's teams!
-        
+        // FOR_OWN_TEAM: Visible to own team, Hidden from other teams
         red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
         red.setAllowFriendlyFire(false);
 
         Team blue = sb.registerNewTeam("Blue");
         blue.setColor(ChatColor.BLUE);
+        // FOR_OWN_TEAM: Visible to own team, Hidden from other teams
         blue.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
         blue.setAllowFriendlyFire(false);
 
@@ -445,13 +429,13 @@ public class Arena {
                 Team otherBlue = otherSb.getTeam("Blue");
                 
                 // Add p to other's scoreboard teams
-                if (myTeam == TeamType.RED && otherRed != null) {
+                if (otherRed == null || otherBlue == null) continue; // Should not happen
+
+                if (myTeam == TeamType.RED) {
                     otherRed.addEntry(p.getName());
-                } else if (myTeam == TeamType.BLUE && otherBlue != null) {
+                } else if (myTeam == TeamType.BLUE) {
                     otherBlue.addEntry(p.getName());
                 }
-                
-                // Also ensure 'other' is added to 'p's scoreboard (Already done in loop above)
             }
         }
     }
