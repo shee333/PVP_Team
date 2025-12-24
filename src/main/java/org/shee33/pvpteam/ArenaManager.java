@@ -44,6 +44,18 @@ public class ArenaManager {
         saveArena(name);
     }
 
+    public void deleteArena(String name) {
+        if (arenas.containsKey(name)) {
+            arenas.remove(name);
+            config.set("arenas." + name, null);
+            try {
+                config.save(file);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public Arena getArena(String name) {
         return arenas.get(name);
     }

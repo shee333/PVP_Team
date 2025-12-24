@@ -50,10 +50,12 @@ public class Arena {
     public Arena(PVP_Team plugin, String name) {
         this.plugin = plugin;
         this.name = name;
-        initSharedScoreboard();
+        // initSharedScoreboard(); // Delayed init
     }
     
     private void initSharedScoreboard() {
+        if (scoreboard != null) return; // Already inited
+        
         scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
         Objective obj = scoreboard.registerNewObjective("pvpteam", "dummy", ChatColor.GOLD + "ACT/0/ - 团队竞技");
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
@@ -130,6 +132,9 @@ public class Arena {
     }
 
     public void join(Player player) {
+        // Ensure scoreboard is ready
+        initSharedScoreboard();
+
         if (state == ArenaState.ENDING) {
             player.sendMessage(ChatColor.RED + "比赛即将结束。");
             return;
