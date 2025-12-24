@@ -2,6 +2,7 @@ package org.shee33.pvpteam;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -27,7 +28,6 @@ public class GameListener implements Listener {
 
     @EventHandler
     public void onDeath(PlayerDeathEvent event) {
-        // Fallback in case they die from something else (e.g. /kill)
         Player p = event.getEntity();
         Arena arena = plugin.getArenaManager().getArena(p);
         if (arena == null) return;
@@ -35,24 +35,34 @@ public class GameListener implements Listener {
         if (arena.getState() == ArenaState.RUNNING) {
             event.getDrops().clear();
             event.setDroppedExp(0);
-            event.setDeathMessage(null); 
+            event.setDeathMessage(null); // Hide vanilla death message
             
-            Location deathLoc = p.getLocation();
+            // Handle stats and broadcast kill message using vanilla logic
+            arena.handleDeath(p, p.getKiller());
             
+            // Save death location for respawn
+            arena.setDeathLocation(p.getUniqueId(), p.getLocation());
+            
+            // Force instant respawn
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 p.spigot().respawn();
-                arena.handleDeath(p, deathLoc);
             }, 1L);
         }
     }
     
-    // In case they manually respawn or some other plugin respawns them
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
         Player p = event.getPlayer();
         Arena arena = plugin.getArenaManager().getArena(p);
         if (arena != null && arena.getState() == ArenaState.RUNNING) {
-             event.setRespawnLocation(p.getLocation());
+             Location deathLoc = arena.getDeathLocation(p.getUniqueId());
+             if (deathLoc != null) {
+                 event.setRespawnLocation(deathLoc);
+                 // After respawn, set spectator and start countdown
+                 plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                     arena.startRespawnSequence(p);
+                 }, 1L);
+             }
         }
     }
 
@@ -91,13 +101,6 @@ public class GameListener implements Listener {
             }
         }
         
-        // Simulated Death Check
-        if (arena != null && arena.getState() == ArenaState.RUNNING) {
-            if (victim.getHealth() - event.getFinalDamage() <= 0) {
-                event.setCancelled(true);
-                arena.handleDeath(victim, victim.getLocation());
-                victim.setHealth(20); // Heal them so they don't actually die
-            }
-        }
+        // Removed simulated death check to use vanilla death event
     }
 }

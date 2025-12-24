@@ -33,9 +33,15 @@ public class Arena {
     private final Map<UUID, TeamType> playerTeams = new HashMap<>();
     private final Map<UUID, Integer> kills = new HashMap<>();
     private final Map<UUID, Integer> deaths = new HashMap<>();
+    private final Map<UUID, Location> deathLocations = new HashMap<>();
     private int redKills = 0;
     private int blueKills = 0;
     private int timeLeft;
+    
+    // Shared Scoreboard
+    private Scoreboard scoreboard;
+    private Team redTeam;
+    private Team blueTeam;
     
     // Tasks
     private BukkitRunnable countdownTask;
@@ -44,6 +50,23 @@ public class Arena {
     public Arena(PVP_Team plugin, String name) {
         this.plugin = plugin;
         this.name = name;
+        initSharedScoreboard();
+    }
+    
+    private void initSharedScoreboard() {
+        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+        Objective obj = scoreboard.registerNewObjective("pvpteam", "dummy", ChatColor.GOLD + "ACT/0/ - 团队竞技");
+        obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+        
+        redTeam = scoreboard.registerNewTeam("Red");
+        redTeam.setColor(ChatColor.RED);
+        redTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
+        redTeam.setAllowFriendlyFire(false);
+        
+        blueTeam = scoreboard.registerNewTeam("Blue");
+        blueTeam.setColor(ChatColor.BLUE);
+        blueTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
+        blueTeam.setAllowFriendlyFire(false);
     }
 
     public String getName() {
@@ -131,7 +154,14 @@ public class Arena {
         player.sendMessage(ChatColor.GREEN + "加入了竞技场 " + name + " 队伍：" + team.getChatColor() + team.getName());
         broadcast(ChatColor.YELLOW + player.getName() + " 加入了游戏 (" + players.size() + "/" + minPlayers + " 人即可开始)。");
 
-        initScoreboard(player);
+        // Join Shared Scoreboard
+        player.setScoreboard(scoreboard);
+        if (team == TeamType.RED) {
+            redTeam.addEntry(player.getName());
+        } else {
+            blueTeam.addEntry(player.getName());
+        }
+        updateScoreboard();
 
         // If game is running, spawn immediately
         if (state == ArenaState.RUNNING) {
@@ -152,6 +182,10 @@ public class Arena {
         playerTeams.remove(player.getUniqueId());
         kills.remove(player.getUniqueId());
         deaths.remove(player.getUniqueId());
+        
+        // Remove from shared scoreboard teams
+        redTeam.removeEntry(player.getName());
+        blueTeam.removeEntry(player.getName());
 
         player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard()); // Reset scoreboard
         
@@ -246,10 +280,19 @@ public class Arena {
     public void spawnPlayer(Player p) {
         TeamType team = playerTeams.get(p.getUniqueId());
         List<Location> spawns = (team == TeamType.RED) ? redSpawns : blueSpawns;
-        if (spawns.isEmpty()) return;
+        if (spawns.isEmpty()) {
+            p.sendMessage(ChatColor.RED + "Error: No spawn points found for team " + team.getName());
+            return;
+        }
         
         // Random spawn or round robin? User said "Set spawn points (multiple)". Random is usually best.
         Location loc = spawns.get(new Random().nextInt(spawns.size()));
+        
+        if (loc == null || loc.getWorld() == null) {
+             p.sendMessage(ChatColor.RED + "Error: Invalid spawn location (World not loaded?).");
+             return;
+        }
+        
         p.teleport(loc);
         p.setGameMode(GameMode.SURVIVAL);
         p.setHealth(20);
@@ -257,18 +300,32 @@ public class Arena {
         p.getInventory().clear(); // Clear inventory before equip
         
         // Execute /clo equip
-        p.performCommand("clo equip");
+        try {
+            p.performCommand("clo equip");
+        } catch (Exception e) {
+            // Ignore command errors if plugin not present
+        }
         
-        // Update scoreboard values only, do NOT reset teams
-        updateScoreboard(p);
+        // Ensure scoreboard is set (in case of respawn/rejoin oddities)
+        if (p.getScoreboard() != scoreboard) {
+            p.setScoreboard(scoreboard);
+        }
+        updateScoreboard();
     }
 
-    public void handleDeath(Player victim, Location deathLoc) {
+    public void setDeathLocation(UUID uuid, Location loc) {
+        deathLocations.put(uuid, loc);
+    }
+
+    public Location getDeathLocation(UUID uuid) {
+        return deathLocations.get(uuid);
+    }
+
+    public void handleDeath(Player victim, Player killer) {
         if (!players.contains(victim.getUniqueId())) return;
         
         deaths.merge(victim.getUniqueId(), 1, Integer::sum);
         
-        Player killer = victim.getKiller();
         if (killer != null && players.contains(killer.getUniqueId())) {
             TeamType killerTeam = playerTeams.get(killer.getUniqueId());
             TeamType victimTeam = playerTeams.get(victim.getUniqueId());
@@ -280,13 +337,16 @@ public class Arena {
                 
                 checkWin();
             }
+            // Kill Message
+            broadcast(killerTeam.getChatColor() + killer.getName() + ChatColor.YELLOW + " 击杀了 " + victimTeam.getChatColor() + victim.getName());
+        } else {
+             // Suicide or other death
+             TeamType victimTeam = playerTeams.get(victim.getUniqueId());
+             broadcast(victimTeam.getChatColor() + victim.getName() + ChatColor.YELLOW + " 意外死亡了。");
         }
+    }
 
-        // Logic: Clear drops handled by gamerule or event cancellation? 
-        // User says: "Player death -> Clear inventory -> Spectator -> 3s -> Respawn"
-        // I should handle PlayerDeathEvent to keepInventory = true (to avoid drops) and then clear it.
-        
-        victim.teleport(deathLoc);
+    public void startRespawnSequence(Player victim) {
         victim.setGameMode(GameMode.SPECTATOR);
         victim.getInventory().clear();
         
@@ -374,6 +434,11 @@ public class Arena {
         playerTeams.clear();
         kills.clear();
         deaths.clear();
+        
+        // Clear teams entries
+        for (String entry : redTeam.getEntries()) redTeam.removeEntry(entry);
+        for (String entry : blueTeam.getEntries()) blueTeam.removeEntry(entry);
+        
         redKills = 0;
         blueKills = 0;
         state = ArenaState.WAITING;
@@ -387,86 +452,12 @@ public class Arena {
     }
 
     // Scoreboard & Teams
-    private void initScoreboard(Player p) {
-        Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();
-        Objective obj = sb.registerNewObjective("pvpteam", "dummy", ChatColor.GOLD + "ACT/0/ - 团队竞技");
-        obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+    // initScoreboard method removed as we use shared scoreboard now
 
-        // Teams for nametags
-        Team red = sb.registerNewTeam("Red");
-        red.setColor(ChatColor.RED);
-        // FOR_OWN_TEAM: Visible to own team, Hidden from other teams
-        red.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
-        red.setAllowFriendlyFire(false);
-
-        Team blue = sb.registerNewTeam("Blue");
-        blue.setColor(ChatColor.BLUE);
-        // FOR_OWN_TEAM: Visible to own team, Hidden from other teams
-        blue.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
-        blue.setAllowFriendlyFire(false);
-
-        // Add existing players to teams on THIS player's scoreboard
-        for (UUID uuid : players) {
-            Player target = Bukkit.getPlayer(uuid);
-            if (target != null) {
-                TeamType t = playerTeams.get(uuid);
-                if (t == TeamType.RED) red.addEntry(target.getName());
-                else blue.addEntry(target.getName());
-            }
-        }
-
-        p.setScoreboard(sb);
-        updateScoreboard(p);
-        
-        // IMPORTANT: Update ALL other players' scoreboards to include THIS player
-        TeamType myTeam = playerTeams.get(p.getUniqueId());
-        for (UUID uuid : players) {
-            if (uuid.equals(p.getUniqueId())) continue;
-            Player other = Bukkit.getPlayer(uuid);
-            if (other != null) {
-                Scoreboard otherSb = other.getScoreboard();
-                Team otherRed = otherSb.getTeam("Red");
-                Team otherBlue = otherSb.getTeam("Blue");
-                
-                // Add p to other's scoreboard teams
-                if (otherRed == null || otherBlue == null) continue; // Should not happen
-
-                if (myTeam == TeamType.RED) {
-                    otherRed.addEntry(p.getName());
-                } else if (myTeam == TeamType.BLUE) {
-                    otherBlue.addEntry(p.getName());
-                }
-            }
-        }
-    }
-    
     private void updateScoreboard() {
-        for (UUID uuid : players) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p != null) updateScoreboard(p);
-        }
-    }
+        Objective obj = scoreboard.getObjective("pvpteam");
+        if (obj == null) return; 
 
-    private void updateScoreboard(Player p) {
-        Scoreboard sb = p.getScoreboard();
-        Objective obj = sb.getObjective("pvpteam");
-        if (obj == null) return; // Should not happen
-
-        // Simple scoreboard update: Clear and re-add entries? 
-        // Or use dynamic entries (ChatColor trick).
-        // For simplicity, let's just set scores.
-        
-        // Lines:
-        // 1. Red: X
-        // 2. Blue: Y
-        // 3. Time: Z
-        
-        // Note: To avoid flickering, usually we use teams for values, but for simple needs:
-        // Resetting scores is okay if not too frequent. 20 ticks is fine.
-        
-        // Actually, just clearing specific scores is hard. 
-        // Let's use specific fake entries.
-        
         obj.getScore(ChatColor.RED + "红队：" + ChatColor.WHITE + redKills + "/" + targetKills).setScore(3);
         obj.getScore(ChatColor.BLUE + "蓝队：" + ChatColor.WHITE + blueKills + "/" + targetKills).setScore(2);
         
@@ -475,21 +466,23 @@ public class Arena {
         String timeStr = String.format("%02d:%02d", mins, secs);
         obj.getScore(ChatColor.YELLOW + "时间：" + ChatColor.WHITE + timeStr).setScore(1);
         
-        // We need to clear old scores if values change to avoid duplicates.
-        // A common way is to use unique identifiers and update suffixes.
-        // But for this MVP, let's keep it simple. Duplicate lines might appear if I don't clear.
-        // To fix:
-        for (String entry : sb.getEntries()) {
+        // Clear old entries to prevent flickering/duplication
+        for (String entry : scoreboard.getEntries()) {
             if (entry.contains("红队") && !entry.equals(ChatColor.RED + "红队：" + ChatColor.WHITE + redKills + "/" + targetKills)) {
-                sb.resetScores(entry);
+                scoreboard.resetScores(entry);
             }
             if (entry.contains("蓝队") && !entry.equals(ChatColor.BLUE + "蓝队：" + ChatColor.WHITE + blueKills + "/" + targetKills)) {
-                sb.resetScores(entry);
+                scoreboard.resetScores(entry);
             }
             if (entry.contains("时间") && !entry.equals(ChatColor.YELLOW + "时间：" + ChatColor.WHITE + timeStr)) {
-                sb.resetScores(entry);
+                scoreboard.resetScores(entry);
             }
         }
+    }
+
+    private void updateScoreboard(Player p) {
+        // Deprecated/Unused in Shared Scoreboard mode, redirect to global update
+        updateScoreboard();
     }
 
     public boolean hasPlayer(Player p) {
